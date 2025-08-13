@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProductPicker, Product } from '@/app/components/ProductPicker';
-import { renderEmail } from '@/lib/builder/render';
 import type { BannerBlock, BuilderBlock, BuilderDocument, ButtonBlock, ProductGridBlock, TextBlock } from '@/lib/builder/types';
+import { renderEmail } from '@/lib/builder/render';
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
@@ -45,7 +45,33 @@ export default function EmailBuilderPage() {
   };
 
   const doc: BuilderDocument = useMemo(() => ({ subject, blocks }), [subject, blocks]);
-  const preview = useMemo(() => renderEmail(doc), [doc]);
+
+  // Debounced export to HTML for iframe preview
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [loadingHtml, setLoadingHtml] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoadingHtml(true);
+      try {
+        const res = await fetch('/api/export/html', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+        const { html } = await res.json();
+        setPreviewHtml(html);
+      } catch {
+        // fallback to client render on error
+        try {
+          const node = renderEmail(doc) as any;
+          setPreviewHtml(String(node));
+        } catch {
+          // ignore
+        }
+      } finally {
+        setLoadingHtml(false);
+      }
+    }, 200);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [doc]);
 
   const exportHtml = async () => {
     const res = await fetch('/api/export/html', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
@@ -59,98 +85,108 @@ export default function EmailBuilderPage() {
 
   return (
     <main className="min-h-screen px-6 py-10">
-      <section className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
-        <div className="space-y-4">
-          <h1 className="text-2xl font-semibold text-[#e6e6e6]">Email Builder</h1>
-
-          <div className="rounded-lg border border-[#1f2937] bg-black/40 p-4 space-y-3">
-            <div>
-              <label className="block text-sm text-[#a3a3a3]">Subject</label>
-              <input value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[#1f2937] bg-black/40 p-4 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => addBlock('banner')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Banner</button>
-              <button onClick={() => addBlock('productGrid')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Product Grid</button>
-              <button onClick={() => addBlock('text')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Text</button>
-              <button onClick={() => addBlock('button')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Button</button>
-            </div>
-
-            <div className="space-y-3">
-              {blocks.map((blk, i) => (
-                <div key={blk.id} className="rounded-md border border-[#1f2937] bg-black/40 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm text-[#a3a3a3]">{blk.type}</div>
-                    <div className="flex gap-2">
-                      <button onClick={() => move(i, -1)} className="rounded-md border border-[#1f2937] px-2 py-1 text-[#e6e6e6] hover:border-[#20f3ff]">↑</button>
-                      <button onClick={() => move(i, 1)} className="rounded-md border border-[#1f2937] px-2 py-1 text-[#e6e6e6] hover:border-[#20f3ff]">↓</button>
-                      <button onClick={() => remove(i)} className="rounded-md border border-[#1f2937] px-2 py-1 text-[#ff3b5c] hover:border-[#ff3b5c]">✕</button>
-                    </div>
-                  </div>
-
-                  {blk.type === 'banner' && (
-                    <div className="grid grid-cols-1 gap-3">
-                      <div>
-                        <label className="block text-sm text-[#a3a3a3]">Title</label>
-                        <input value={(blk as any).title} onChange={(e) => update(i, { title: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-[#a3a3a3]">Image URL</label>
-                        <input value={(blk as any).imageUrl} onChange={(e) => update(i, { imageUrl: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-sm text-[#a3a3a3]">CTA Label</label>
-                          <input value={(blk as any).ctaLabel} onChange={(e) => update(i, { ctaLabel: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-[#a3a3a3]">CTA Link</label>
-                          <input value={(blk as any).ctaHref} onChange={(e) => update(i, { ctaHref: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {blk.type === 'productGrid' && (
-                    <ProductPicker onChange={onProductsChange(i)} />
-                  )}
-
-                  {blk.type === 'text' && (
-                    <div>
-                      <label className="block text-sm text-[#a3a3a3]">HTML</label>
-                      <textarea value={(blk as any).html} onChange={(e) => update(i, { html: e.target.value } as any)} className="mt-1 h-32 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                    </div>
-                  )}
-
-                  {blk.type === 'button' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm text-[#a3a3a3]">Label</label>
-                        <input value={(blk as any).label} onChange={(e) => update(i, { label: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-[#a3a3a3]">Link</label>
-                        <input value={(blk as any).href} onChange={(e) => update(i, { href: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
-                      </div>
-                    </div>
-                  )}
+      <div className="mx-auto max-w-[1400px]">
+        <h1 className="mb-4 text-2xl font-semibold text-[#e6e6e6]">Email Builder</h1>
+        <div className="flex gap-6">
+          <div className="w-[380px] shrink-0">
+            <div className="space-y-4">
+              <div className="rounded-lg border border-[#1f2937] bg-black/40 p-4 space-y-3">
+                <div>
+                  <label className="block text-sm text-[#a3a3a3]">Subject</label>
+                  <input value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="flex justify-end gap-2">
-              <button onClick={exportHtml} className="rounded-md bg-[#20f3ff] px-3 py-2 text-black hover:opacity-90">Export HTML</button>
+              <div className="rounded-lg border border-[#1f2937] bg-black/40 p-4 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => addBlock('banner')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Banner</button>
+                  <button onClick={() => addBlock('productGrid')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Product Grid</button>
+                  <button onClick={() => addBlock('text')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Text</button>
+                  <button onClick={() => addBlock('button')} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Add Button</button>
+                </div>
+
+                <div className="space-y-3">
+                  {blocks.map((blk, i) => (
+                    <div key={blk.id} className="rounded-md border border-[#1f2937] bg-black/40 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="text-sm text-[#a3a3a3]">{blk.type}</div>
+                        <div className="flex gap-2">
+                          <button onClick={() => move(i, -1)} className="rounded-md border border-[#1f2937] px-2 py-1 text-[#e6e6e6] hover:border-[#20f3ff]">↑</button>
+                          <button onClick={() => move(i, 1)} className="rounded-md border border-[#1f2937] px-2 py-1 text-[#e6e6e6] hover:border-[#20f3ff]">↓</button>
+                          <button onClick={() => remove(i)} className="rounded-md border border-[#1f2937] px-2 py-1 text-[#ff3b5c] hover:border-[#ff3b5c]">✕</button>
+                        </div>
+                      </div>
+
+                      {blk.type === 'banner' && (
+                        <div className="grid grid-cols-1 gap-3">
+                          <div>
+                            <label className="block text-sm text-[#a3a3a3]">Title</label>
+                            <input value={(blk as any).title} onChange={(e) => update(i, { title: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-[#a3a3a3]">Image URL</label>
+                            <input value={(blk as any).imageUrl} onChange={(e) => update(i, { imageUrl: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm text-[#a3a3a3]">CTA Label</label>
+                              <input value={(blk as any).ctaLabel} onChange={(e) => update(i, { ctaLabel: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                            </div>
+                            <div>
+                              <label className="block text-sm text-[#a3a3a3]">CTA Link</label>
+                              <input value={(blk as any).ctaHref} onChange={(e) => update(i, { ctaHref: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {blk.type === 'productGrid' && (
+                        <ProductPicker onChange={onProductsChange(i)} />
+                      )}
+
+                      {blk.type === 'text' && (
+                        <div>
+                          <label className="block text-sm text-[#a3a3a3]">HTML</label>
+                          <textarea value={(blk as any).html} onChange={(e) => update(i, { html: e.target.value } as any)} className="mt-1 h-32 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                        </div>
+                      )}
+
+                      {blk.type === 'button' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm text-[#a3a3a3]">Label</label>
+                            <input value={(blk as any).label} onChange={(e) => update(i, { label: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-[#a3a3a3]">Link</label>
+                            <input value={(blk as any).href} onChange={(e) => update(i, { href: e.target.value } as any)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <button onClick={exportHtml} className="rounded-md bg-[#20f3ff] px-3 py-2 text-black hover:opacity-90">Export HTML</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="sticky top-6 rounded-lg border border-[#1f2937] bg-black/40 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm text-[#a3a3a3]">Live preview</div>
+                {loadingHtml && <div className="text-xs text-[#a3a3a3]">Rendering…</div>}
+              </div>
+              <div className="rounded-md border border-[#1f2937] bg-white text-black">
+                <iframe title="preview" className="h-[80vh] w-full rounded-md" srcDoc={previewHtml} />
+              </div>
             </div>
           </div>
         </div>
-
-        <div className="rounded-lg border border-[#1f2937] bg-black/40 p-4">
-          <div className="mb-2 text-sm text-[#a3a3a3]">Live preview</div>
-          <div className="rounded-md border border-[#1f2937] bg-white p-4 text-black">{preview}</div>
-        </div>
-      </section>
+      </div>
     </main>
   );
 }
