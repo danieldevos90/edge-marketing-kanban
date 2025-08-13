@@ -14,6 +14,8 @@ export default function EmailBuilderPage() {
     { id: uid(), type: 'productGrid', products: [] } as ProductGridBlock,
     { id: uid(), type: 'button', label: 'Shop now', href: 'https://edgefoodequipment.com' } as ButtonBlock,
   ]);
+  const [docId, setDocId] = useState<string | null>(null);
+  const [docName, setDocName] = useState<string>('Featured Picks');
 
   const addBlock = (type: BuilderBlock['type']) => {
     if (type === 'banner') setBlocks((b) => [...b, { id: uid(), type, title: 'New Banner', imageUrl: '', ctaLabel: 'Learn more', ctaHref: '#' } as BannerBlock]);
@@ -81,6 +83,30 @@ export default function EmailBuilderPage() {
     URL.revokeObjectURL(url);
   };
 
+  const saveDoc = async () => {
+    const body = { name: docName, doc };
+    if (!docId) {
+      const res = await fetch('/api/builder/docs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const json = await res.json();
+      if (res.ok) setDocId(json.doc.id);
+      alert(res.ok ? 'Saved!' : json.error || 'Failed');
+    } else {
+      const res = await fetch(`/api/builder/docs/${docId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doc }) });
+      const json = await res.json();
+      alert(res.ok ? 'Updated!' : json.error || 'Failed');
+    }
+  };
+
+  const sendHtml = async () => {
+    const to = prompt('Recipients (comma-separated)') || '';
+    if (!to) return;
+    const resHtml = await fetch('/api/export/html', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+    const { html } = await resHtml.json();
+    const res = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: to.split(',').map((s) => s.trim()), subject, html }) });
+    const json = await res.json();
+    alert(res.ok ? 'Sent!' : json.error || 'Failed to send');
+  };
+
   const fallbackHtml = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#0a0a0a;color:#e6e6e6;font-family:Inter,Arial;margin:0;padding:16px}</style></head><body><div>Rendering preview…</div></body></html>';
 
   return (
@@ -92,8 +118,17 @@ export default function EmailBuilderPage() {
             <div className="space-y-4">
               <div className="rounded-lg border border-[#1f2937] bg-black/40 p-4 space-y-3">
                 <div>
+                  <label className="block text-sm text-[#a3a3a3]">Document name</label>
+                  <input value={docName} onChange={(e) => setDocName(e.target.value)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                </div>
+                <div>
                   <label className="block text-sm text-[#a3a3a3]">Subject</label>
                   <input value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-md border border-[#1f2937] bg-[#0a0a0a] p-2 text-[#e6e6e6]" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveDoc} className="rounded-md bg-[#20f3ff] px-3 py-2 text-black hover:opacity-90">{docId ? 'Update' : 'Save'}</button>
+                  <button onClick={exportHtml} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Export HTML</button>
+                  <button onClick={sendHtml} className="rounded-md border border-[#1f2937] px-3 py-2 text-[#e6e6e6] hover:border-[#20f3ff]">Send</button>
                 </div>
               </div>
 
@@ -166,10 +201,6 @@ export default function EmailBuilderPage() {
                     </div>
                   ))}
                 </div>
-
-                <div className="flex justify-end gap-2">
-                  <button onClick={exportHtml} className="rounded-md bg-[#20f3ff] px-3 py-2 text-black hover:opacity-90">Export HTML</button>
-                </div>
               </div>
             </div>
           </div>
@@ -182,7 +213,7 @@ export default function EmailBuilderPage() {
               </div>
               {!!previewError && <div className="mb-2 text-xs text-[#ff3b5c]">{previewError}</div>}
               <div className="rounded-md border border-[#1f2937] bg-[#0a0a0a] text-[#e6e6e6]">
-                <iframe title="preview" className="h-[80vh] w-full rounded-md" style={{ backgroundColor: '#0a0a0a' }} srcDoc={previewHtml || fallbackHtml} />
+                <iframe title="preview" className="h-[80vh] w-full rounded-md" style={{ backgroundColor: '#0a0a0a' }} srcDoc={previewHtml || '<!doctype html><html><body style="background:#0a0a0a;color:#e6e6e6;font-family:Inter,Arial;margin:0;padding:16px">Rendering preview…</body></html>'} />
               </div>
             </div>
           </div>
