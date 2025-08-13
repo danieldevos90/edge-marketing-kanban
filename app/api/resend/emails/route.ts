@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const subject = searchParams.get('subject') || undefined;
   const dateFrom = searchParams.get('dateFrom') || undefined;
   const dateTo = searchParams.get('dateTo') || undefined;
+  const status = searchParams.get('status') || undefined;
 
   const emails = await listResendEmails({
     limit: limit ? parseInt(limit, 10) : 50,
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
     subject,
     dateFrom,
     dateTo,
+    status,
   });
 
   return NextResponse.json({ emails });

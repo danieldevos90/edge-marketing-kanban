@@ -41,21 +41,20 @@ export type ResendEmailItem = {
   [key: string]: unknown;
 };
 
-export async function listResendEmails(options: { limit?: number; from?: string; subject?: string; dateFrom?: string; dateTo?: string } = {}): Promise<ResendEmailItem[]> {
+export async function listResendEmails(options: { limit?: number; from?: string; subject?: string; dateFrom?: string; dateTo?: string; status?: string } = {}): Promise<ResendEmailItem[]> {
   const params = new URLSearchParams();
   if (options.limit) params.set('limit', String(options.limit));
   if (options.from) params.set('from', options.from);
   if (options.subject) params.set('subject', options.subject);
   if (options.dateFrom) params.set('date_from', options.dateFrom);
   if (options.dateTo) params.set('date_to', options.dateTo);
+  if (options.status) params.set('status', options.status);
 
-  // Not all query params may be supported by Resend; attempt and gracefully fallback
   try {
     const data = await resendApiFetch<{ data?: ResendEmailItem[]; emails?: ResendEmailItem[] }>(`/emails${params.toString() ? `?${params.toString()}` : ''}`);
     const list = (data as any).data || (data as any).emails || [];
     return Array.isArray(list) ? list : [];
   } catch (_err) {
-    // If list endpoint is not available, return empty array instead of throwing
     return [];
   }
 }
