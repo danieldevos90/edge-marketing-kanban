@@ -6,7 +6,15 @@ export function getPool(): Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error('DATABASE_URL is not set');
-    pool = new Pool({ connectionString, max: 5, ssl: { rejectUnauthorized: false } as any });
+    let ssl: any = false;
+    try {
+      const host = new URL(connectionString).hostname || '';
+      const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      ssl = isLocal ? false : { rejectUnauthorized: false };
+    } catch {
+      ssl = { rejectUnauthorized: false };
+    }
+    pool = new Pool({ connectionString, max: 5, ssl });
   }
   return pool;
 }

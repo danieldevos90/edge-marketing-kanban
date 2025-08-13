@@ -4,6 +4,8 @@ import { query } from '@/lib/db/pg';
 export const dynamic = 'force-dynamic';
 
 const SQL = `
+create extension if not exists pgcrypto;
+
 create table if not exists public.builder_docs (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -25,7 +27,6 @@ create table if not exists public.builder_doc_versions (
 `;
 
 export async function POST() {
-  // Run multi-statement migration
   const statements = SQL.split('\n\n').map((s) => s.trim()).filter(Boolean);
   for (const stmt of statements) {
     await query(stmt);
