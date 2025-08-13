@@ -8,6 +8,6 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const doc = (await req.json()) as BuilderDocument;
   const reactNode = renderEmail(doc);
-  const html = render(reactNode);
+  const html = await render(reactNode);
   return NextResponse.json({ html });
 }

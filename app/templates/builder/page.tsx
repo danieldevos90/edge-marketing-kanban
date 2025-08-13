@@ -49,23 +49,21 @@ export default function EmailBuilderPage() {
   // Debounced export to HTML for iframe preview
   const [previewHtml, setPreviewHtml] = useState('');
   const [loadingHtml, setLoadingHtml] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setLoadingHtml(true);
+      setPreviewError(null);
       try {
         const res = await fetch('/api/export/html', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const { html } = await res.json();
-        setPreviewHtml(html);
-      } catch {
-        // fallback to client render on error
-        try {
-          const node = renderEmail(doc) as any;
-          setPreviewHtml(String(node));
-        } catch {
-          // ignore
-        }
+        setPreviewHtml(typeof html === 'string' ? html : '');
+      } catch (e: any) {
+        setPreviewHtml('');
+        setPreviewError(e?.message || 'Failed to render');
       } finally {
         setLoadingHtml(false);
       }
@@ -82,6 +80,8 @@ export default function EmailBuilderPage() {
     a.href = url; a.download = 'email.html'; a.click();
     URL.revokeObjectURL(url);
   };
+
+  const fallbackHtml = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#0a0a0a;color:#e6e6e6;font-family:Inter,Arial;margin:0;padding:16px}</style></head><body><div>Rendering preview…</div></body></html>';
 
   return (
     <main className="min-h-screen px-6 py-10">
@@ -180,8 +180,9 @@ export default function EmailBuilderPage() {
                 <div className="text-sm text-[#a3a3a3]">Live preview</div>
                 {loadingHtml && <div className="text-xs text-[#a3a3a3]">Rendering…</div>}
               </div>
-              <div className="rounded-md border border-[#1f2937] bg-white text-black">
-                <iframe title="preview" className="h-[80vh] w-full rounded-md" srcDoc={previewHtml} />
+              {!!previewError && <div className="mb-2 text-xs text-[#ff3b5c]">{previewError}</div>}
+              <div className="rounded-md border border-[#1f2937] bg-[#0a0a0a] text-[#e6e6e6]">
+                <iframe title="preview" className="h-[80vh] w-full rounded-md" style={{ backgroundColor: '#0a0a0a' }} srcDoc={previewHtml || fallbackHtml} />
               </div>
             </div>
           </div>

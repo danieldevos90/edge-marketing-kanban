@@ -29,7 +29,11 @@ export function ProductPicker({ onChange, initialSelected = [] }: { onChange: (p
 
   useEffect(() => { fetchProducts(''); }, []);
 
-  useEffect(() => { onChange(selected); }, [selected, onChange]);
+  useEffect(() => {
+    onChange(selected);
+    // Intentionally omit onChange from deps to avoid re-triggering when parent recreates handler
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
 
   const toggle = (p: Product) => {
     setSelected((prev) => prev.some((x) => x.id === p.id) ? prev.filter((x) => x.id !== p.id) : [...prev, p]);
